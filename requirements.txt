@@ -1,29 +1,13 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pandas==2.1.3
-matplotlib==3.8.2
-seaborn==0.13.0
-folium==0.15.1
-geopandas==0.14.1
-h3==4.1.1
-shapely==2.0.2
-pydantic==2.5.0
-statsmodels==0.14.0
+fastapi
+uvicorn
+pandas
+matplotlib
+seaborn
+folium
+h3
+shapely
+pydantic
+statsmodels
 pyarrow
 fastparquet
-
-        # return JSONResponse({
-        #     "filtered_csv": f"{plot_dir}/filtered_df.csv",
-        #     "map_html": f"{plot_dir}/h3_hex_map.html",
-        #     "json_summary": f"{plot_dir}/pickup_summary.json",
-        #     "plots_dir": f"{plot_dir}/plots/"
-        # })
-
-
-# http://127.0.0.1:8000/forecast-logic
-
-# {
-#   "weekday": "sun",
-#   "start_time": "08:00",
-#   "end_time": "08:10"
-# }
+geopandas
