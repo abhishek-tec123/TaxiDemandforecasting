@@ -6,6 +6,7 @@ import datetime
 from app import Plot_logic, VALID_WEEKDAYS, forcast_logic
 import matplotlib
 import os
+import fastapi
 
 matplotlib.use('Agg')
 
@@ -84,10 +85,25 @@ def run_forecast_api(req: MainRequest):
         print(f"[ERROR] /forecast-logic Exception: {e}")
         return {"error": str(e)}
 
-
-
-
-
+@app.get("/status")
+def health_check():
+    return {
+        "status": "ok",
+        "server": {
+            "framework": "FastAPI",
+            "fastapi_version": fastapi.__version__,
+            "python_version": f"{os.sys.version_info.major}.{os.sys.version_info.minor}.{os.sys.version_info.micro}",
+            "environment": os.environ.get("ENV", "development")
+        },
+        "api": {
+            "endpoints": [
+                {"path": "/health", "method": "GET", "description": "Health check endpoint"},
+                {"path": "/plot-graph", "method": "POST", "description": "Generate plots and summary for taxi pickups"},
+                {"path": "/forecast-logic", "method": "POST", "description": "Generate forecasted plots and summary for taxi pickups"},
+                {"path": "/files/{file_path}", "method": "GET", "description": "Serve static files from plot directory"}
+            ]
+        }
+    }
 
 # import json
 
