@@ -97,7 +97,7 @@ def health_check():
         },
         "api": {
             "endpoints": [
-                {"path": "/health", "method": "GET", "description": "Health check endpoint"},
+                {"path": "/status", "method": "GET", "description": "Status check endpoint"},
                 {"path": "/plot-graph", "method": "POST", "description": "Generate plots and summary for taxi pickups"},
                 {"path": "/forecast-logic", "method": "POST", "description": "Generate forecasted plots and summary for taxi pickups"},
                 {"path": "/files/{file_path}", "method": "GET", "description": "Serve static files from plot directory"}
