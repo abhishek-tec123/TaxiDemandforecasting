@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
 from typing import Optional
 import datetime
@@ -16,6 +17,13 @@ DEFAULT_DATA_DIR = os.environ.get('TAXI_DATA_DIR', os.path.join(SRC_ROOT, 'parqu
 DEFAULT_PLOT_DIR = os.environ.get('PLOT_DIR', os.path.join(SRC_ROOT, 'plot'))
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.mount("/files", StaticFiles(directory=DEFAULT_PLOT_DIR), name="files")
 
 class MainRequest(BaseModel):
