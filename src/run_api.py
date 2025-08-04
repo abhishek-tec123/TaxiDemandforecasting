@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, validator
 from typing import Optional, List, Dict
 from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
 import datetime
 import fastapi
 import os
@@ -71,8 +70,6 @@ class MainRequest(BaseModel):
                 raise ValueError("date must be in YYYY-MM-DD format")
         return v
 
-# Cache JSON file to avoid disk read each time
-@lru_cache()
 def get_forecast_summary() -> dict:
     path = os.path.join(DEFAULT_PLOT_DIR, "pickup_summary_forecasted.json")
     if not os.path.exists(path):
@@ -136,7 +133,7 @@ async def run_forecast_api(req: MainRequest):
                 forecast_next_week_data.append(entry)
 
         valid_mape_hexes = [h for h in forecast_next_week_data if h.get("forecast_accuracy") is not None]
-        best_mape_hexes = sorted(valid_mape_hexes, key=lambda x: x["forecast_accuracy"])[:10]
+        best_mape_hexes = sorted(valid_mape_hexes, key=lambda x: x["forecast_next_week"], reverse=True)[:10]
 
         hex_ids = [hex_data["hex_id"] for hex_data in best_mape_hexes]
         location_info = get_location_info_for_hexes(hex_ids)
