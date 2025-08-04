@@ -127,11 +127,24 @@ def add_forecast_to_json(json_path, output_path=None, weekday='fri'):
                     model = ExponentialSmoothing(ts, trend="add", seasonal=None)
                     fit = model.fit()
                     forecast = fit.forecast(1)
-                    child["forecast_next_week"] = round(forecast.iloc[0])
+                    forecast_value = round(forecast.iloc[0])
+                    child["forecast_next_week"] = forecast_value
+                    # Calculate MAPE using last actual value and forecast for that period
+                    if len(ts) > 1 and not ts.isnull().all():
+                        last_actual = ts.iloc[-1]
+                        if last_actual != 0:
+                            mape = abs((last_actual - forecast_value) / last_actual) * 100
+                            child["forecast_accuracy"] = round(mape, 2)
+                        else:
+                            child["forecast_accuracy"] = None
+                    else:
+                        child["forecast_accuracy"] = None
                 except Exception as e:
                     child["forecast_next_week"] = None
+                    child["forecast_accuracy"] = None
             else:
                 child["forecast_next_week"] = None
+                child["forecast_accuracy"] = None
     if output_path is None:
         output_path = os.path.join(os.path.dirname(json_path), "pickup_summary_forecasted.json")
     with open(output_path, 'w') as f:

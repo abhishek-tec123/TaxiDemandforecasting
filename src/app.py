@@ -126,10 +126,10 @@ def forcast_logic(weekday, start_time, end_time, data_dir, plot_dir):
     plot_files = get_plot_file_urls(plot_dir)
 
     return {
-        "filtered_csv": f"{BASE_URL}/filtered_df.csv",
+        # "filtered_csv": f"{BASE_URL}/filtered_df.csv",
         "map_html": f"{BASE_URL}/h3_hex_map.html",
-        "json_summary": f"{BASE_URL}/pickup_summary.json",
-        "json_forecasted": f"{BASE_URL}/{os.path.basename(forecasted_json_path)}",
+        # "json_summary": f"{BASE_URL}/pickup_summary.json",
+        # "json_forecasted": f"{BASE_URL}/{os.path.basename(forecasted_json_path)}",
         "map_html_forecasted": f"{BASE_URL}/h3_hex_map_forecasted.html",
         "plots": plot_files
     }
