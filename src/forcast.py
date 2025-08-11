@@ -4,19 +4,19 @@
 
 # # Input data
 # data = {
-#     "2016-01-01": 49,
-#     "2016-01-08": 111,
-#     "2016-01-15": 51,
-#     "2016-01-22": 52,
-#     "2016-01-29": 71,
-#     "2016-02-05": 41,
-#     "2016-02-12": 70,
-#     "2016-02-19": 47,
-#     "2016-02-26": 33,
-#     "2016-03-04": 49,
-#     "2016-03-11": 45,
-#     "2016-03-18": 49,
-#     "2016-03-25": 87
+#     "2016-01-01": 8,
+#     "2016-01-08": 5,
+#     "2016-01-15": 4,
+#     "2016-01-22": 5,
+#     "2016-01-29": 4,
+#     "2016-02-05": 3,
+#     "2016-02-12": 7,
+#     "2016-02-19": 4,
+#     "2016-02-26": 1,
+#     "2016-03-04": 7,
+#     "2016-03-11": 4,
+#     "2016-03-18": 3,
+#     # "2016-03-25": 87
 # }
 
 # # Convert to time series
@@ -109,44 +109,78 @@ import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 warnings.simplefilter("ignore", ConvergenceWarning)
 
+import json
+import pandas as pd
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+import os
+# Suppress only the runtime warnings from statsmodels
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 def add_forecast_to_json(json_path, output_path=None, weekday='fri'):
     with open(json_path, 'r') as f:
         data = json.load(f)
+
     freq = get_pandas_week_freq(weekday)
+
     for parent in data.values():
         children = parent.get("children", {})
         for child in children.values():
             hex_id = child.get("hex_id")
             pickups = child.get("pickups_by_date", {})
-            if len(pickups) >= 3:
+
+            if pickups:
                 ts = pd.Series(pickups)
                 ts.index = pd.to_datetime(ts.index)
                 ts = ts.sort_index()
+
+                # Force to weekly frequency and forward-fill missing weeks
                 ts = ts.asfreq(freq)
+                ts = ts.ffill()
+
+                # Not enough data to forecast
+                if ts.notna().sum() < 2:
+                    child["forecast_next_week"] = None
+                    child["forecast_accuracy"] = None
+                    child["forecast_confidence_percent"] = None
+                    continue
+
                 try:
                     model = ExponentialSmoothing(ts, trend="add", seasonal=None)
                     fit = model.fit()
                     forecast = fit.forecast(1)
                     forecast_value = round(forecast.iloc[0])
+
+                    # Always set forecast value if model worked
                     child["forecast_next_week"] = forecast_value
-                    # Calculate MAPE using last actual value and forecast for that period
-                    if len(ts) > 1 and not ts.isnull().all():
-                        last_actual = ts.iloc[-1]
-                        if last_actual != 0:
-                            mape = abs((last_actual - forecast_value) / last_actual) * 100
-                            child["forecast_accuracy"] = round(mape, 2)
-                        else:
-                            child["forecast_accuracy"] = None
+
+                    # Historical accuracy (MAPE across entire fit)
+                    fitted_values = fit.fittedvalues
+                    mape_series = abs((ts - fitted_values) / ts.replace(0, float('nan'))) * 100
+                    mape = mape_series.dropna().mean()
+
+                    if pd.notna(mape):
+                        mape_rounded = round(mape, 2)
+                        conf_rounded = round(max(0, 100 - mape_rounded), 2)
+                        child["forecast_accuracy"] = mape_rounded
+                        child["forecast_confidence_percent"] = conf_rounded
                     else:
                         child["forecast_accuracy"] = None
+                        child["forecast_confidence_percent"] = None
+
                 except Exception as e:
+                    print(f"Forecast failed for hex_id {hex_id}: {e}")
                     child["forecast_next_week"] = None
                     child["forecast_accuracy"] = None
+                    child["forecast_confidence_percent"] = None
             else:
                 child["forecast_next_week"] = None
                 child["forecast_accuracy"] = None
+                child["forecast_confidence_percent"] = None
+
     if output_path is None:
         output_path = os.path.join(os.path.dirname(json_path), "pickup_summary_forecasted.json")
+
     with open(output_path, 'w') as f:
         json.dump(data, f, indent=2)
+
     return output_path
