@@ -250,127 +250,110 @@ class H3HexMap:
 import folium
 import h3
 import json
+import branca.colormap as cm
 
 def generate_map_from_json_with_forcast(json_data):
     print(f"[DEBUG] Generating map from JSON with forecast...")
-    # Estimate a center from the first parent hex
-    first_parent_id = next(iter(json_data))
-    center_latlng = h3.cell_to_latlng(json_data[first_parent_id]["parent_id"])
+
+    # Center map on New York City
+    center_latlng = (40.7128, -74.0060)
+    zoom_start = 10
 
     # Initialize map
-    m = folium.Map(location=center_latlng, zoom_start=12)
-    
-    # Collect all forecast values to determine color scale
-    all_forecasts = []
-    for parent_id, pdata in json_data.items():
-        for _, child in pdata["children"].items():
-            forecast = child.get("forecast_next_week")
-            if forecast is not None:
-                all_forecasts.append(forecast)
-    
-    # Define color scale based on forecast values
+    m = folium.Map(location=center_latlng, zoom_start=zoom_start, tiles="CartoDB positron")
+
+    # Collect all forecast values
+    all_forecasts = [
+        child.get("forecast_next_week")
+        for pdata in json_data.values()
+        for child in pdata["children"].values()
+        if child.get("forecast_next_week") is not None
+    ]
+
+    # Define intuitive color scale: low = light red, high = dark red
     if all_forecasts:
-        min_forecast = min(all_forecasts)
-        max_forecast = max(all_forecasts)
-        forecast_range = max_forecast - min_forecast if max_forecast != min_forecast else 1
+        min_forecast, max_forecast = min(all_forecasts), max(all_forecasts)
+        colormap = cm.LinearColormap(
+            colors=cm.linear.Reds_09.colors,  # keep as-is
+            vmin=min_forecast,
+            vmax=max_forecast
+        )
     else:
-        min_forecast = 0
-        max_forecast = 1
-        forecast_range = 1
-    
-    def get_forecast_color(forecast_value):
-        """Get color based on forecast value - blue (low), yellow (medium), red (high)"""
-        if forecast_value is None:
-            return '#808080'  # Gray for no forecast
-        
-        # Normalize forecast value to 0-1 range
-        if forecast_range == 0:
-            normalized = 0.5
-        else:
-            normalized = (forecast_value - min_forecast) / forecast_range
-        
-        # Simple three-level color scheme
-        if normalized <= 0.33:
-            return '#0000ff'  # Blue for low
-        elif normalized <= 0.66:
-            return '#ffff00'  # Yellow for medium
-        else:
-            return '#ff0000'  # Red for high
+        min_forecast, max_forecast = 0, 1
+        colormap = cm.LinearColormap(
+            colors=cm.linear.Reds_09.colors,
+            vmin=0,
+            vmax=1
+        )
 
-    for parent_id, pdata in json_data.items():
-        parent_hex = pdata["parent_id"]
-        parent_centroid = h3.cell_to_latlng(parent_hex)
+    colormap.caption = "Forecast Next Week"
+    colormap.add_to(m)
 
-        # Parent Marker
-        popup_html = f"""
-        <b>Parent Hex ID:</b> {parent_hex}<br>
-        <b>Total Pickups:</b> {pdata['total_pickups']}<br>
-        <b>Total Area (km²):</b> {pdata['total_area_km2']}
-        """
-        folium.Marker(
-            location=parent_centroid,
-            icon=folium.Icon(color='green', icon='cloud'),
-            popup=folium.Popup(popup_html, max_width=300)
-        ).add_to(m)
+    # Iterate resolutions 0 → 8
+    for res in range(0, 9):
+        print(f"[DEBUG] Rendering resolution {res}...")
 
-        # Parent Hex Polygon
-        folium.Polygon(
-            locations=h3.cell_to_boundary(parent_hex),
-            color='green',
-            fill=False,
-            weight=2
-        ).add_to(m)
+        for parent_id, pdata in json_data.items():
+            parent_hex = pdata["parent_id"]
+            children_at_res = h3.cell_to_children(parent_hex, res) if h3.get_resolution(parent_hex) <= res else []
 
-        # Children hexes
-        for _, child in pdata["children"].items():
-            hex_id = child["hex_id"]
-            centroid = child["centroid"]
-            forecast = child.get("forecast_next_week", "N/A")
-            accuracy = child.get("forecast_confidence_percent", "N/A")
-            # Get color based on forecast value
-            forecast_color = get_forecast_color(forecast)
-            
-            # Create popup content first
-            popup = f"""
-            <b>Child Hex ID:</b> {hex_id}<br>
-            <b>Area (km²):</b> {child['area_km2']}<br>
-            <!-- <b>Pickup Count:</b> {child['pickup_count']}<br> -->
-            <b>Forecast Next Week:</b> {forecast}<br>
-            <b>confidence percent:</b> {accuracy}<br>
-            """
+            for hex_id in children_at_res:
+                forecast = None
+                child_info = None
+                for c in pdata["children"].values():
+                    if c["hex_id"] == hex_id:
+                        forecast = c.get("forecast_next_week")
+                        child_info = c
+                        break
 
-            if child["pickups_by_date"]:
-                for date, count in child["pickups_by_date"].items():
-                    popup += f"&nbsp;&nbsp;• {date}: {count}<br>"
-            else:
-                popup += "None<br>"
-            
-            # Child Polygon with popup
-            folium.Polygon(
-                locations=h3.cell_to_boundary(hex_id),
-                color=forecast_color,
-                fill=True,
-                fill_color=forecast_color,
-                fill_opacity=0.6,
-                weight=1,
-                popup=folium.Popup(popup, max_width=300)
-            ).add_to(m)
+                color = colormap(forecast) if forecast is not None else "#d3d3d3"
 
+                # Popup HTML
+                popup_html = f"""
+                <div style="font-size:14px;">
+                    <b>Resolution:</b> {res}<br>
+                    <b>Hex ID:</b> {hex_id}<br>
+                """
+                if child_info:
+                    popup_html += f"""
+                        <b>Area (km²):</b> {child_info['area_km2']}<br>
+                        <b>Forecast Next Week:</b> {forecast}<br>
+                        <b>Confidence %:</b> {child_info.get('forecast_confidence_percent', 'N/A')}<br>
+                        <hr style='margin:4px 0;'>
+                        <b>Last Week:</b><br>
+                        &nbsp;&nbsp;• Date: {child_info.get('last_week_date', 'N/A')}<br>
+                        &nbsp;&nbsp;• Actual: {child_info.get('last_week_actual', 'N/A')}<br>
+                        &nbsp;&nbsp;• Fitted Forecast: {child_info.get('last_week_forecast', 'N/A')}<br>
+                        &nbsp;&nbsp;• Missed Rides: {child_info.get('last_week_missed_rides', 'N/A')}<br>
+                        &nbsp;&nbsp;• Extra Rides: {child_info.get('last_week_extra_rides', 'N/A')}<br>
+                        <hr style='margin:4px 0;'>
+                        <b>Pickups:</b><br>
+                    """
+                    if child_info["pickups_by_date"]:
+                        popup_html += "".join([f"&nbsp;&nbsp;• {date}: {count}<br>" for date, count in child_info["pickups_by_date"].items()])
+                    else:
+                        popup_html += "None<br>"
+                popup_html += "</div>"
 
-
-    # Add color legend
-    legend_html = '''
-    <div style="position: fixed; 
-                bottom: 50px; left: 50px; width: 200px; height: 160px; 
-                background-color: white; border:2px solid grey; z-index:9999; 
-                font-size:14px; padding: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.3);">
-    <p><b>Forecast Color Legend</b></p>
-    <p><span style="color: #0000ff;">■</span> Low Forecast</p>
-    <p><span style="color: #ffff00;">■</span> Medium Forecast</p>
-    <p><span style="color: #ff0000;">■</span> High Forecast</p>
-    <p><span style="color: #808080;">■</span> No Forecast</p>
-    </div>
-    '''
-    m.get_root().html.add_child(folium.Element(legend_html))
+                # Add GeoJson hex
+                folium.GeoJson(
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "Polygon",
+                            "coordinates": [list(map(lambda x: x[::-1], h3.cell_to_boundary(hex_id)))]
+                        },
+                        "properties": {"forecast": forecast, "resolution": res}
+                    },
+                    style_function=lambda feature, color=color: {
+                        "fillColor": color,
+                        "color": "black",
+                        "weight": 0.2,
+                        "fillOpacity": 0.6,
+                    },
+                    highlight_function=lambda x: {"weight": 2, "color": "yellow"},
+                    tooltip=folium.Tooltip(f"Res: {res} | Hex: {hex_id} | Forecast: {forecast}"),
+                    popup=folium.Popup(popup_html, max_width=300)
+                ).add_to(m)
 
     return m

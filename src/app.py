@@ -3,7 +3,7 @@ import pandas as pd
 import json
 import glob
 from plotONmapH3 import H3HexMap, generate_map_from_json_with_forcast
-from get_df_and_plot import extract_pickup_dataframe
+from get_df_and_plot import extract_pickup_dataframe, extract_forecast_comparison_data
 from forcast import add_forecast_to_json
 from dotenv import load_dotenv
 load_dotenv()
@@ -122,6 +122,9 @@ def forcast_logic(weekday, start_time, end_time, data_dir, plot_dir):
     
     forecasted_map_path = os.path.join(plot_dir, "h3_hex_map_forecasted.html")
     forcastedH3ap.save(forecasted_map_path)
+
+    # Generate forecast comparison plots
+    extract_forecast_comparison_data(forecasted_json_data, plot=True, save_dir=os.path.relpath(plot_dir, SRC_ROOT))
 
     plot_files = get_plot_file_urls(plot_dir)
 

@@ -153,6 +153,38 @@ def add_forecast_to_json(json_path, output_path=None, weekday='fri'):
                     # Always set forecast value if model worked
                     child["forecast_next_week"] = forecast_value
 
+                    # Capture last observed week metrics and errors vs fitted value
+                    try:
+                        last_week_date = ts.index.max()
+                        last_week_actual = int(ts.iloc[-1])
+                        # Use fitted value corresponding to the last observed point
+                        if hasattr(fit, "fittedvalues") and not pd.isna(fit.fittedvalues.iloc[-1]):
+                            last_week_fitted = int(round(fit.fittedvalues.iloc[-1]))
+                        else:
+                            last_week_fitted = None
+
+                        child["last_week_date"] = last_week_date.strftime("%Y-%m-%d") if pd.notna(last_week_date) else None
+                        child["last_week_actual"] = last_week_actual
+                        child["last_week_forecast"] = last_week_fitted
+
+                        # Compute missed/extra rides for the targeted last week date
+                        if last_week_fitted is not None:
+                            diff = last_week_fitted - last_week_actual
+                            missed = int(max(0, diff))  # forecast > actual
+                            extra = int(max(0, -diff))  # actual > forecast
+                            child["last_week_missed_rides"] = missed
+                            child["last_week_extra_rides"] = extra
+                        else:
+                            child["last_week_missed_rides"] = None
+                            child["last_week_extra_rides"] = None
+                    except Exception:
+                        # Be robust: if any issue, keep fields but mark as None
+                        child["last_week_date"] = None
+                        child["last_week_actual"] = None
+                        child["last_week_forecast"] = None
+                        child["last_week_missed_rides"] = None
+                        child["last_week_extra_rides"] = None
+
                     # Historical accuracy (MAPE across entire fit)
                     fitted_values = fit.fittedvalues
                     mape_series = abs((ts - fitted_values) / ts.replace(0, float('nan'))) * 100
